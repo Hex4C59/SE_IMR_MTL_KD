@@ -11,5 +11,8 @@ wheels/
 
 data/*
 !data/README.md
+!data/interim/.gitkeep
+!data/raw/.gitkeep
+!data/processed/.gitkeep
 pretrained/*
 !pretrained/.gitkeep
