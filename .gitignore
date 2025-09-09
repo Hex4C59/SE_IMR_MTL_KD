@@ -9,10 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
-data/*
-!data/README.md
-!data/interim/.gitkeep
-!data/raw/.gitkeep
-!data/processed/.gitkeep
+data/interim/organized_datasets/*
+data/processed/features_msp_1.6/*
+data/processed/labels/*
+data/raw/IEMOCAP/*
+data/raw/MSP-PODCAST-Publish-1.12/*
+
 pretrained/*
 !pretrained/.gitkeep
