@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-extract_wav2vec2.py
+Extracting features using wav2vec2-base
 
 Created on 2025-09-08
 Author: Liu Yang liuyang16@stu.sau.edu.cn
 License: MIT License
-Project:
+Project: https://github.com/Hex4C59/SE_IMR_MTL_KD
 python: >=3.8 
 """
 import os
