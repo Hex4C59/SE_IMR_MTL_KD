@@ -1,21 +1,15 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
+regression_metrics.py.
+
 Metrics for regression tasks in emotion recognition.
 
-This module provides functions to calculate various metrics for
-evaluating regression models, particularly for VAD prediction.
-
-Example:
-    >>> metrics = compute_metrics(labels, predictions)
-    >>> print(f"MSE: {metrics['total_mse']}, R²: {metrics['total_r2']}")
-
+Date: 2025-09-10
+Author: Liu Yang
+License: MIT
+Project: https://github.com/Hex4C59/SE_IMR_MTL_KD
 """
-
-__author__ = "Liu Yang"
-__copyright__ = "Copyright 2025, AIMSL"
-__license__ = "MIT"
-__maintainer__ = "Liu Yang"
-__email__ = "yang.liu6@siat.ac.cn"
-__last_updated__ = "2023-11-15"
 
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
@@ -32,6 +26,14 @@ def compute_ccc(y_true, y_pred):
     Returns:
         float: CCC value
 
+    Raises:
+        None
+
+    Examples:
+        >>> y_true = np.array([1, 2, 3, 4, 5])
+        >>> y_pred = np.array([1.1, 2.1, 2.9, 4.2, 4.8])
+        >>> ccc = compute_ccc(y_true, y_pred)
+        >>> print(f"CCC: {ccc:.4f}")
     """
     mean_true = np.mean(y_true)
     mean_pred = np.mean(y_pred)
@@ -44,9 +46,7 @@ def compute_ccc(y_true, y_pred):
     numerator = 2 * covariance
     denominator = var_true + var_pred + (mean_true - mean_pred) ** 2
 
-    return numerator / (
-        denominator + 1e-8
-    )  # Add small epsilon to avoid division by zero
+    return numerator / (denominator + 1e-8)
 
 
 def compute_metrics(labels, predictions):
@@ -60,8 +60,15 @@ def compute_metrics(labels, predictions):
     Returns:
         dict: Dictionary containing various metrics
 
+    Raises:
+        None
+
+    Examples:
+        >>> labels = np.random.randn(100, 3)
+        >>> predictions = np.random.randn(100, 3)
+        >>> metrics = compute_metrics(labels, predictions)
+        >>> print(f"Average CCC: {metrics['total_ccc']:.4f}")
     """
-    # Calculate metrics for each dimension
     v_mse = mean_squared_error(labels[:, 0], predictions[:, 0])
     a_mse = mean_squared_error(labels[:, 1], predictions[:, 1])
     d_mse = mean_squared_error(labels[:, 2], predictions[:, 2])

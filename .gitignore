@@ -17,3 +17,6 @@ data/raw/MSP-PODCAST-Publish-1.12/*
 
 pretrained/*
 !pretrained/.gitkeep
+
+runs/*
+!runs/.gitkeep

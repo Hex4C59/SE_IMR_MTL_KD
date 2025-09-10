@@ -1,176 +1,119 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-GRU-based models for emotion recognition.
+mtl_GRU_model.py
 
-This module contains GRU-based models for emotion recognition tasks,
-including a base GRU model and a specialized VAD regression model.
+Multi-task GRU model for emotion recognition.
 
-Example :
-    >>> model = VADRegressionModel(input_size=768, hidden_size=256, num_layers=2)
-    >>> outputs = model(features)
+Date: 2025-09-10
+Author: Liu Yang
+License: MIT
+Project: https://github.com/Hex4C59/SE_IMR_MTL_KD
 """
-
-__author__ = "Liu Yang"
-__copyright__ = "Copyright 2025, AIMSL"
-__license__ = "MIT"
-__maintainer__ = "Liu Yang"
-__email__ = "yang.liu6@siat.ac.cn"
-__last_updated__ = "2023-11-15"
 
 import torch
 import torch.nn as nn
 
-# Ensure torch is used explicitly to satisfy linters
-TORCH_VERSION = torch.__version__
 
+class BaselineEmotionGRU(nn.Module):
+    """Baseline GRU model for emotion recognition.
 
-class GRUModel(nn.Module):
-    """
-    Base GRU model with sequential layers.
+    Args:
+        input_size: Input feature dimension
+        output_size: VAD regression output dimension (3)
+        num_classes: Number of emotion classes (7)
+        hidden_size: GRU hidden dimension
+        num_layers: Number of GRU layers
+        embedding_dim: Embedding dimension before output heads
+        dropout: Dropout probability (deprecated, kept for compatibility)
+        use_classification: Whether to include classification head
 
-    This is the base GRU model with a sequential architecture.
+    Returns:
+        Dictionary with regression and optionally classification outputs
 
-    Attributes:
-        hidden_size (int): Size of the hidden layers
-        num_layers (int): Number of GRU layers
-        gru_model (nn.Sequential): Sequential container of GRU layers and other components
+    Raises:
+        None
 
-    """
-
-    def __init__(self, input_size, hidden_size, num_layers, output_size, dropout=0.2):
-        """
-        Initialize the GRU model.
-
-        Args :
-            input_size (int): Dimension of input features
-            hidden_size (int): Hidden size of GRU layers
-            num_layers (int): Number of GRU layers
-            output_size (int): Output dimension
-            dropout (float): Dropout rate
-        """
-        super(GRUModel, self).__init__()
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.gru_model = nn.Sequential(
-            nn.GRU(
-                input_size, hidden_size, num_layers, batch_first=True, dropout=dropout
-            ),
-            nn.Linear(hidden_size, output_size),
-            nn.GRU(
-                hidden_size, hidden_size, num_layers, batch_first=True, dropout=dropout
-            ),
-            nn.Linear(hidden_size, output_size),
-            nn.Embedding(output_size, output_size),
-            nn.Linear(output_size, output_size),
-        )
-
-    def forward(self, x):
-        """
-        Forward pass through the model.
-
-        Args :
-            x (torch.Tensor): Input tensor of shape [batch_size, seq_len, input_size]
-
-        Returns :
-            torch.Tensor: Output tensor
-        """
-        out = self.gru_model(x)
-        return out
-
-
-class VADRegressionModel(nn.Module):
-    """
-    Wrapper for GRUModel to handle VAD regression.
-
-    This model adapts the GRUModel for the specific task of VAD regression.
-    It handles the architecture issues in the original GRUModel.
-
-    Attributes :
-        model (GRUModel): The underlying GRU model
+    Examples:
+        >>> model = BaselineEmotionGRU(768, 3, 7, 128, 2, 128, 0.0, False)
+        >>> features = torch.randn(32, 100, 768)
+        >>> outputs = model(features)
+        >>> print('classification' in outputs)  # False for single-task
     """
 
-    def __init__(self, input_size, hidden_size, num_layers, output_size=3, dropout=0.2):
-        """
-        Initialize the VAD regression model.
+    def __init__(
+        self,
+        input_size: int,
+        output_size: int,
+        num_classes: int = 7,
+        hidden_size: int = 128,
+        num_layers: int = 2,
+        embedding_dim: int = 128,
+        dropout: float = 0.2,
+        use_classification: bool = True,
+    ) -> None:
+        super().__init__()
+        self.use_classification = use_classification
 
-        Args :
-            input_size (int): Dimension of input features
-            hidden_size (int): Hidden size of GRU layers
-            num_layers (int): Number of GRU layers
-            output_size (int): Output dimension (default: 3 for V, A, D)
-            dropout (float): Dropout rate
-        """
-        super(VADRegressionModel, self).__init__()
-        self.model = GRUModel(input_size, hidden_size, num_layers, output_size, dropout)
-
-    def forward(self, x):
-        """
-        Forward pass through the model.
-
-        Args :
-            x (torch.Tensor): Input tensor of shape [batch_size, seq_len, input_size]
-
-        Returns :
-            torch.Tensor: Output tensor of shape [batch_size, output_size]
-        """
-        # The GRUModel has issues with its architecture, so we need to handle it properly
-        # First GRU layer
-        x, _ = self.model.gru_model[0](x)
-        # Get the last time step output
-        x = x[:, -1, :]
-        # First linear layer
-        x = self.model.gru_model[1](x)
-        # We'll skip the rest of the model as it's not properly designed
-        # Instead, we'll return the output directly as VAD predictions
-        return x
-
-
-class ImprovedVADModel(nn.Module):
-    """
-    Improved VAD regression model with proper GRU architecture.
-
-    This model uses a more straightforward architecture for VAD regression,
-    avoiding the issues in the original GRUModel.
-
-    Attributes :
-        gru (nn.GRU): GRU layer
-        fc (nn.Linear): Fully connected output layer
-    """
-
-    def __init__(self, input_size, hidden_size, num_layers, output_size=3, dropout=0.2):
-        """
-        Initialize the improved VAD regression model.
-
-        Args :
-            input_size (int): Dimension of input features
-            hidden_size (int): Hidden size of GRU layers
-            num_layers (int): Number of GRU layers
-            output_size (int): Output dimension (default: 3 for V, A, D)
-            dropout (float): Dropout rate
-        """
-        super(ImprovedVADModel, self).__init__()
         self.gru = nn.GRU(
             input_size=input_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
+            dropout=dropout,
             batch_first=True,
-            dropout=dropout if num_layers > 1 else 0,
+            bidirectional=False,
         )
-        self.fc = nn.Linear(hidden_size, output_size)
 
-    def forward(self, x):
+        self.embedding = nn.Linear(hidden_size, embedding_dim)
+        self.regression_head = nn.Linear(embedding_dim, output_size)
+
+        if self.use_classification:
+            self.classification_head = nn.Linear(embedding_dim, num_classes)
+
+        self._init_weights()
+
+    def _init_weights(self) -> None:
+        """Initialize model weights using Xavier initialization."""
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
+            elif isinstance(module, nn.GRU):
+                for name, param in module.named_parameters():
+                    if "weight" in name:
+                        nn.init.xavier_uniform_(param)
+                    elif "bias" in name:
+                        nn.init.constant_(param, 0)
+
+    def forward(self, x: torch.Tensor) -> dict:
         """
         Forward pass through the model.
 
         Args :
-            x (torch.Tensor): Input tensor of shape [batch_size, seq_len, input_size]
+            x (torch.Tensor): Input tensor of shape (batch_size, seq_len, input_size)
 
         Returns :
-            torch.Tensor: Output tensor of shape [batch_size, output_size]
+            dict: Regression and optionally classification outputs
+
+        Raises :
+            None
+
+        Examples :
+            >>> model = BaselineEmotionGRU(768, 3, 7, use_classification=False)
+            >>> x = torch.randn(32, 100, 768)
+            >>> outputs = model(x)
+            >>> print(outputs.keys())  # Only 'regression' for single-task
         """
-        # GRU returns output and hidden state, we only need the output
-        output, _ = self.gru(x)
-        # Use the last time step output
-        last_hidden = output[:, -1, :]
-        # Project to output dimension
-        vad_prediction = self.fc(last_hidden)
-        return vad_prediction
+        out, _ = self.gru(x)
+        last_step = out[:, -1, :]
+        embedding = self.embedding(last_step)
+        regression_output = self.regression_head(embedding)
+
+        result = {"regression": regression_output}
+
+        if self.use_classification:
+            classification_output = self.classification_head(embedding)
+            result["classification"] = classification_output
+
+        return result
