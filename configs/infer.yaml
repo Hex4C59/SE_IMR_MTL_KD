@@ -1,0 +1,25 @@
+# General settings
+device: 'cuda'
+gpu_id: 7
+
+# Data settings
+data:
+  features_dir: '/mnt/shareEEx/liuyang/code/SE_IMR_MTL_KD/data/processed/features_msp_1.6/wav2vec2-base-l7'
+  labels_file: '/mnt/shareEEx/liuyang/code/SE_IMR_MTL_KD/data/processed/labels/v1.6/label/labels_concensus.csv'
+  batch_size: 32
+  num_workers: 32
+  pin_memory: true
+  use_classification: false
+
+# Model settings
+model:
+  input_size: 768
+  hidden_size: 128
+  num_layers: 2
+  output_size: 3
+  num_classes: 7
+  dropout: 0.3
+
+# Output settings
+output:
+  save_dir: 'runs/infer'

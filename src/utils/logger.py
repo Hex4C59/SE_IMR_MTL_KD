@@ -56,7 +56,7 @@ class ExperimentLogger:
         self._header_logged = False
 
     def _setup_main_logger(self) -> logging.Logger:
-        """Setup main logger for detailed training logs."""
+        """Set up main logger for detailed training logs."""
         logger = logging.getLogger(self.logger_name)
         logger.setLevel(logging.INFO)
 
@@ -87,7 +87,7 @@ class ExperimentLogger:
         return logger
 
     def _setup_results_logger(self) -> logging.Logger:
-        """Setup results logger for structured epoch data."""
+        """Set up results logger for structured epoch data."""
         results_logger = logging.getLogger(self.results_logger_name)
         results_logger.setLevel(logging.INFO)
 

@@ -1,15 +1,31 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-train.py.
+One-line summary of the module.
 
-Training entry point for VAD regression model.
+Detailed description of the module.
 
-Date: 2025-09-10
-Author: Liu Yang
-License: MIT
-Project: https://github.com/Hex4C59/SE_IMR_MTL_KD
+Example :
+    >>> example
 """
+
+__author__ = "Liu Yang"
+__copyright__ = "Copyright 2025, AIMSL"
+__license__ = "MIT"
+__maintainer__ = "Liu Yang"
+__email__ = "yang.liu6@siat.ac.cn"
+__last_updated__ = "2025-11-15"
+
+"""
+One-line summary of the class.
+
+Detailed description of the class.
+
+Attributes:
+    attribute1 (type): Description of attribute1.
+    attribute2 (type): Description of attribute2.
+"""
+
 
 import argparse
 import os
@@ -201,7 +217,7 @@ def validate(model, dataloader, criterion, device, logger, use_classification=Tr
         all_emotion_labels = np.concatenate(all_emotion_labels, axis=0)
         all_classification_masks = np.concatenate(all_classification_masks, axis=0)
 
-        valid_classification_mask = (all_classification_masks == True) & (
+        valid_classification_mask = (all_classification_masks) & (
             all_emotion_labels >= 0
         )
 
@@ -261,7 +277,7 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/default.yaml",
+        default="configs/train.yaml",
         help="Path to configuration file",
     )
     args = parser.parse_args()
