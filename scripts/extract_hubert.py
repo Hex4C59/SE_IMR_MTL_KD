@@ -60,7 +60,7 @@ class HubertExtractor:
         )
         self.model.eval()
         self.device = torch.device(device)
-        self.model.to(self.device)
+        self.model.to(self.device) # type: ignore
 
         self.sample_rate = 16_000
         self.max_chunk = max_chunk

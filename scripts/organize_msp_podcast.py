@@ -1,280 +1,281 @@
 #!/usr/bin/env python3
-# filepath: /mnt/shareEEx/liuyang/code/SE_IMR_MTL_KD/utils/organize_msp_podcast.py
+# -*- coding: utf-8 -*-
+"""
+Organize MSP-Podcast dataset into train, test, and validation splits.
 
-import os
+This script parses the Partitions.txt file and copies audio files into
+organized folders for each split. Supports dry-run and force-overwrite modes.
+
+Example :
+    >>> python scripts/organize_msp_podcast.py --version v1.6 --base-dir /path/to/project
+"""
+
+__author__ = "Liu Yang"
+__copyright__ = "Copyright 2025, AIMSL"
+__license__ = "MIT"
+__maintainer__ = "Liu Yang"
+__email__ = "yang.liu6@siat.ac.cn"
+__last_updated__ = "2025-11-15"
+
+import argparse
 import shutil
 from pathlib import Path
-import argparse
+from typing import Dict, List, Tuple
 
-def parse_partitions_file(partitions_path):
+
+def parse_partitions_file(partitions_path: Path) -> Dict[str, List[str]]:
     """
-    解析Partitions.txt文件，返回按集合分类的文件列表
+    Parse Partitions.txt and return file lists for each split.
+
+    Args :
+        partitions_path (Path): Path to Partitions.txt.
+
+    Returns :
+        Dict[str, List[str]]: Dict with keys 'Train', 'Test', 'Validation'.
+
+    Raises :
+        FileNotFoundError: If partitions_path does not exist.
     """
-    partitions = {'Train': [], 'Test': [], 'Validation': []}
-    
-    with open(partitions_path, 'r', encoding='utf-8') as f:
+    partitions = {"Train": [], "Test": [], "Validation": []}
+    with partitions_path.open("r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('#'):
+            if not line or line.startswith("#"):
                 continue
-            
-            # 分割行内容 "集合; 文件名"
-            if ';' in line:
-                partition, filename = line.split(';', 1)
+            if ";" in line:
+                partition, filename = line.split(";", 1)
                 partition = partition.strip()
                 filename = filename.strip()
-                
-                # 统一分区名称
-                if partition in ['Train', 'Training']:
-                    partitions['Train'].append(filename)
-                elif partition in ['Test', 'Testing']:
-                    partitions['Test'].append(filename)
-                elif partition in ['Validation', 'Valid', 'Val']:
-                    partitions['Validation'].append(filename)
-    
+                if partition in ["Train", "Training"]:
+                    partitions["Train"].append(filename)
+                elif partition in ["Test", "Testing"]:
+                    partitions["Test"].append(filename)
+                elif partition in ["Validation", "Valid", "Val"]:
+                    partitions["Validation"].append(filename)
     return partitions
 
-def copy_audio_files(source_dir, target_dir, file_list, partition_name):
+
+def copy_audio_files(
+    source_dir: Path,
+    target_dir: Path,
+    file_list: List[str],
+    partition_name: str,
+    force: bool = False,
+) -> Tuple[int, int, int]:
     """
-    复制音频文件到目标目录
+    Copy audio files to target directory for a given partition.
+
+    Args :
+        source_dir (Path): Directory with source audio files.
+        target_dir (Path): Output directory.
+        file_list (List[str]): List of filenames to copy.
+        partition_name (str): Partition name.
+        force (bool): Overwrite existing files if True.
+
+    Returns :
+        Tuple[int, int, int]: (copied_count, skipped_count, missing_count).
+
+    Raises :
+        None
     """
     partition_dir = target_dir / partition_name.lower()
     partition_dir.mkdir(parents=True, exist_ok=True)
-    
     copied_count = 0
     skipped_count = 0
     missing_files = []
-    
-    print(f"\n正在处理 {partition_name} 集合...")
-    print(f"文件数量: {len(file_list)}")
-    
+
+    print(f"\nProcessing {partition_name} split...")
+    print(f"Total files: {len(file_list)}")
+
     for filename in file_list:
         source_file = source_dir / filename
         target_file = partition_dir / filename
-        
-        # 检查目标文件是否已存在
-        if target_file.exists():
-            skipped_count += 1
-            if skipped_count % 100 == 0:
-                print(f"已跳过 {skipped_count} 个现有文件...")
-            continue
-        
-        if source_file.exists():
-            # 创建目标文件的父目录（如果需要）
-            target_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            # 复制文件
-            shutil.copy2(source_file, target_file)
-            copied_count += 1
-            
-            if copied_count % 100 == 0:
-                print(f"已复制 {copied_count} 个文件...")
-        else:
+
+        if not source_file.exists():
             missing_files.append(filename)
-    
-    print(f"{partition_name} 集合完成:")
-    print(f"  - 复制了 {copied_count} 个新文件")
-    print(f"  - 跳过了 {skipped_count} 个已存在文件")
-    print(f"  - 缺失 {len(missing_files)} 个文件")
-    print(f"  - 总计处理: {copied_count + skipped_count}/{len(file_list)} 个文件")
-    
+            continue
+
+        if target_file.exists() and not force:
+            skipped_count += 1
+            continue
+
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_file, target_file)
+        copied_count += 1
+        if copied_count % 100 == 0:
+            print(f"Copied {copied_count} files...")
+
+    print(f"{partition_name} split done:")
+    print(f"  - Copied: {copied_count}")
+    print(f"  - Skipped: {skipped_count}")
+    print(f"  - Missing: {len(missing_files)}")
+    print(f"  - Total processed: {copied_count + skipped_count}/{len(file_list)}")
+
     if missing_files:
-        # 保存缺失文件列表
         missing_file_path = target_dir / f"missing_files_{partition_name.lower()}.txt"
-        with open(missing_file_path, 'w') as f:
+        with missing_file_path.open("w") as f:
             for missing_file in missing_files:
                 f.write(f"{missing_file}\n")
-        print(f"  - 缺失文件列表已保存到: {missing_file_path}")
-    
+        print(f"  - Missing file list saved to: {missing_file_path}")
+
     return copied_count, skipped_count, len(missing_files)
 
-def organize_dataset(version, base_dir):
+
+def organize_dataset(version: str, base_dir: str, force: bool = False) -> bool:
     """
-    组织指定版本的数据集
+    Organize MSP-Podcast dataset for a specific version.
+
+    Args :
+        version (str): Dataset version.
+        base_dir (str): Project base directory.
+        force (bool): Overwrite existing files if True.
+
+    Returns :
+        bool: True if organization succeeded.
+
+    Raises :
+        None
     """
-    print(f"\n开始组织 MSP-Podcast {version} 数据集...")
-    
-    # 定义路径
+    print(f"\nOrganizing MSP-Podcast {version} dataset...")
+
     base_path = Path(base_dir)
     audios_dir = base_path / "data" / "MSP-PODCAST-Publish-1.12" / "Audios"
     labels_dir = base_path / "data" / "labels" / version
     partitions_file = labels_dir / "Partitions.txt"
     output_dir = base_path / "data" / "organized_datasets" / version
-    
-    # 检查输入路径
+
     if not audios_dir.exists():
-        print(f"错误: 音频目录不存在: {audios_dir}")
+        print(f"Error: Audio directory not found: {audios_dir}")
         return False
-    
     if not partitions_file.exists():
-        print(f"错误: Partitions文件不存在: {partitions_file}")
+        print(f"Error: Partitions file not found: {partitions_file}")
         return False
-    
-    # 创建输出目录
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    print(f"音频源目录: {audios_dir}")
-    print(f"分区文件: {partitions_file}")
-    print(f"输出目录: {output_dir}")
-    
-    # 解析分区文件
+    print(f"Audio source: {audios_dir}")
+    print(f"Partitions file: {partitions_file}")
+    print(f"Output dir: {output_dir}")
+
     partitions = parse_partitions_file(partitions_file)
-    
-    # 显示统计信息
     total_files = sum(len(files) for files in partitions.values())
-    print(f"\n数据集统计:")
-    print(f"训练集: {len(partitions['Train'])} 个文件")
-    print(f"测试集: {len(partitions['Test'])} 个文件")
-    print(f"验证集: {len(partitions['Validation'])} 个文件")
-    print(f"总计: {total_files} 个文件")
-    
-    # 复制文件
+    print("\nDataset stats:")
+    print(f"Train: {len(partitions['Train'])}")
+    print(f"Test: {len(partitions['Test'])}")
+    print(f"Validation: {len(partitions['Validation'])}")
+    print(f"Total: {total_files}")
+
     total_copied = 0
     total_skipped = 0
     total_missing = 0
-    
+
     for partition_name, file_list in partitions.items():
-        if file_list:  # 只处理非空的分区
-            copied, skipped, missing = copy_audio_files(audios_dir, output_dir, file_list, partition_name)
+        if file_list:
+            copied, skipped, missing = copy_audio_files(
+                audios_dir, output_dir, file_list, partition_name, force=force
+            )
             total_copied += copied
             total_skipped += skipped
             total_missing += missing
-    
-    # 保存分区信息
+
     summary_file = output_dir / "dataset_summary.txt"
-    with open(summary_file, 'w') as f:
-        f.write(f"MSP-Podcast {version} 数据集组织摘要\n")
-        f.write(f"{'='*50}\n\n")
-        f.write(f"源音频目录: {audios_dir}\n")
-        f.write(f"分区文件: {partitions_file}\n")
-        f.write(f"输出目录: {output_dir}\n\n")
-        f.write(f"数据集统计:\n")
-        f.write(f"训练集: {len(partitions['Train'])} 个文件\n")
-        f.write(f"测试集: {len(partitions['Test'])} 个文件\n")
-        f.write(f"验证集: {len(partitions['Validation'])} 个文件\n")
-        f.write(f"总计文件: {total_files}\n")
-        f.write(f"新复制文件: {total_copied}\n")
-        f.write(f"跳过已存在文件: {total_skipped}\n")
-        f.write(f"缺失文件: {total_missing}\n")
-        f.write(f"成功处理文件: {total_copied + total_skipped}\n")
-    
-    print(f"\n{version} 数据集组织完成!")
-    print(f"新复制了 {total_copied} 个文件")
-    print(f"跳过了 {total_skipped} 个已存在的文件")
+    with summary_file.open("w") as f:
+        f.write(f"MSP-Podcast {version} dataset summary\n")
+        f.write(f"{'=' * 50}\n\n")
+        f.write(f"Source audio: {audios_dir}\n")
+        f.write(f"Partitions file: {partitions_file}\n")
+        f.write(f"Output dir: {output_dir}\n\n")
+        f.write("Stats:\n")
+        f.write(f"Train: {len(partitions['Train'])}\n")
+        f.write(f"Test: {len(partitions['Test'])}\n")
+        f.write(f"Validation: {len(partitions['Validation'])}\n")
+        f.write(f"Total files: {total_files}\n")
+        f.write(f"Copied: {total_copied}\n")
+        f.write(f"Skipped: {total_skipped}\n")
+        f.write(f"Missing: {total_missing}\n")
+        f.write(f"Processed: {total_copied + total_skipped}\n")
+
+    print(f"\n{version} dataset organization complete!")
+    print(f"Copied: {total_copied}")
+    print(f"Skipped: {total_skipped}")
     if total_missing > 0:
-        print(f"有 {total_missing} 个文件缺失")
-    print(f"总共处理了 {total_copied + total_skipped}/{total_files} 个文件")
-    print(f"数据集摘要已保存到: {summary_file}")
-    
+        print(f"Missing: {total_missing}")
+    print(f"Processed: {total_copied + total_skipped}/{total_files}")
+    print(f"Summary saved to: {summary_file}")
+
     return True
 
-def main():
-    parser = argparse.ArgumentParser(description='组织MSP-Podcast数据集')
-    parser.add_argument('--version', choices=['v1.3', 'v1.6', 'both'], default='both',
-                        help='要组织的数据集版本 (默认: both)')
-    parser.add_argument('--base-dir', default='/mnt/shareEEx/liuyang/code/SE_IMR_MTL_KD',
-                        help='项目基础目录 (默认: /mnt/shareEEx/liuyang/code/SE_IMR_MTL_KD)')
-    parser.add_argument('--dry-run', action='store_true',
-                        help='只显示统计信息，不实际复制文件')
-    parser.add_argument('--force', action='store_true',
-                        help='强制覆盖已存在的文件')
-    
+
+def main() -> None:
+    """
+    Entry point for organizing MSP-Podcast dataset.
+
+    Args :
+        None
+
+    Returns :
+        None
+
+    Raises :
+        None
+    """
+    parser = argparse.ArgumentParser(
+        description="Organize MSP-Podcast dataset into splits"
+    )
+    parser.add_argument(
+        "--version",
+        choices=["v1.3", "v1.6", "both"],
+        default="both",
+        help="Dataset version to organize (default: both)",
+    )
+    parser.add_argument(
+        "--base-dir",
+        default="/mnt/shareEEx/liuyang/code/SE_IMR_MTL_KD",
+        help="Project base directory (default: /mnt/shareEEx/liuyang/code/SE_IMR_MTL_KD)",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show stats only, do not copy files"
+    )
+    parser.add_argument("--force", action="store_true", help="Overwrite existing files")
     args = parser.parse_args()
-    
-    if args.dry_run:
-        print("注意: 这是一次试运行，不会实际复制文件")
-    
-    if args.force:
-        print("注意: 启用强制模式，将覆盖已存在的文件")
-    
+
     base_dir = args.base_dir
-    
-    if args.version == 'both':
-        versions = ['v1.3', 'v1.6']
-    else:
-        versions = [args.version]
-    
+    versions = ["v1.3", "v1.6"] if args.version == "both" else [args.version]
     success_count = 0
+
     for version in versions:
+        labels_dir = Path(base_dir) / "data" / "labels" / version
+        partitions_file = labels_dir / "Partitions.txt"
+        output_dir = Path(base_dir) / "data" / "organized_datasets" / version
+
         if args.dry_run:
-            # 试运行模式：只解析和显示信息
-            labels_dir = Path(base_dir) / "data" / "labels" / version
-            partitions_file = labels_dir / "Partitions.txt"
-            output_dir = Path(base_dir) / "data" / "organized_datasets" / version
-            
             if partitions_file.exists():
-                print(f"\n分析 {version} 版本:")
+                print(f"\nAnalyzing {version}:")
                 partitions = parse_partitions_file(partitions_file)
                 total_files = sum(len(files) for files in partitions.values())
-                
-                # 统计已存在的文件
                 total_existing = 0
                 for partition_name, file_list in partitions.items():
                     partition_dir = output_dir / partition_name.lower()
-                    existing_count = 0
-                    if partition_dir.exists():
-                        for filename in file_list:
-                            if (partition_dir / filename).exists():
-                                existing_count += 1
+                    existing_count = sum(
+                        1
+                        for filename in file_list
+                        if (partition_dir / filename).exists()
+                    )
                     total_existing += existing_count
-                    print(f"{partition_name}: {len(file_list)} 个文件 ({existing_count} 个已存在)")
-                
-                print(f"总计: {total_files} 个文件 ({total_existing} 个已存在)")
-                print(f"需要复制: {total_files - total_existing} 个文件")
+                    print(
+                        f"{partition_name}: {len(file_list)} files "
+                        f"({existing_count} existing)"
+                    )
+                print(f"Total: {total_files} files ({total_existing} existing)")
+                print(f"To copy: {total_files - total_existing} files")
             else:
-                print(f"错误: {version} 的Partitions文件不存在")
+                print(f"Error: {version} Partitions.txt not found")
         else:
-            # 如果启用强制模式，修改copy_audio_files函数的行为
-            if args.force:
-                # 临时修改函数来支持强制覆盖
-                original_copy_audio_files = copy_audio_files
-                
-                def force_copy_audio_files(source_dir, target_dir, file_list, partition_name):
-                    partition_dir = target_dir / partition_name.lower()
-                    partition_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    copied_count = 0
-                    missing_files = []
-                    
-                    print(f"\n正在处理 {partition_name} 集合 (强制模式)...")
-                    print(f"文件数量: {len(file_list)}")
-                    
-                    for filename in file_list:
-                        source_file = source_dir / filename
-                        target_file = partition_dir / filename
-                        
-                        if source_file.exists():
-                            # 创建目标文件的父目录（如果需要）
-                            target_file.parent.mkdir(parents=True, exist_ok=True)
-                            
-                            # 复制文件（覆盖已存在的）
-                            shutil.copy2(source_file, target_file)
-                            copied_count += 1
-                            
-                            if copied_count % 100 == 0:
-                                print(f"已复制 {copied_count} 个文件...")
-                        else:
-                            missing_files.append(filename)
-                    
-                    print(f"{partition_name} 集合完成: 复制了 {copied_count}/{len(file_list)} 个文件")
-                    
-                    if missing_files:
-                        missing_file_path = target_dir / f"missing_files_{partition_name.lower()}.txt"
-                        with open(missing_file_path, 'w') as f:
-                            for missing_file in missing_files:
-                                f.write(f"{missing_file}\n")
-                        print(f"缺失文件列表已保存到: {missing_file_path}")
-                    
-                    return copied_count, 0, len(missing_files)  # 强制模式下跳过数为0
-                
-                # 临时替换函数
-                globals()['copy_audio_files'] = force_copy_audio_files
-            
-            if organize_dataset(version, base_dir):
+            if organize_dataset(version, base_dir, force=args.force):
                 success_count += 1
-    
+
     if not args.dry_run:
-        print(f"\n完成! 成功组织了 {success_count}/{len(versions)} 个数据集版本")
+        print(f"\nDone! Organized {success_count}/{len(versions)} dataset versions")
+
 
 if __name__ == "__main__":
     main()

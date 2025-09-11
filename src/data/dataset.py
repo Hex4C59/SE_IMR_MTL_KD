@@ -36,7 +36,7 @@ def _load_feature_safe(feature_path: str):
         Exception: Propagates torch.load exceptions if both attempts fail.
     """
     try:
-        with torch.serialization.safe_globals([np._core.multiarray._reconstruct]):
+        with torch.serialization.safe_globals([np._core.multiarray._reconstruct]): # type: ignore
             return torch.load(feature_path, map_location="cpu", weights_only=True)
     except Exception:
         return torch.load(feature_path, map_location="cpu", weights_only=False)

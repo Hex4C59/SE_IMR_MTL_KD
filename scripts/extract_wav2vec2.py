@@ -23,7 +23,6 @@ __maintainer__ = "Liu Yang"
 __email__ = "yang.liu6@siat.ac.cn"
 __last_updated__ = "2025-11-15"
 
-from __future__ import annotations
 
 import argparse
 from pathlib import Path
@@ -72,7 +71,7 @@ class Wav2Vec2Extractor:
         )
         self.model.eval()
         self.device = torch.device(device)
-        self.model.to(self.device)
+        self.model.to(self.device) # type: ignore
 
         self.sample_rate = 16_000
         self.max_chunk = max_chunk
