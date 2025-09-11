@@ -16,7 +16,7 @@ Coding rules (strictly enforced):
 
     Detailed description of the module.
 
-    Example:
+    Example :
         >>> example
     """
 
@@ -33,14 +33,14 @@ Coding rules (strictly enforced):
 
     Detailed description of the function.
 
-    Args:
+    Args :
         param1 (type): Description of param1.
         param2 (type): Description of param2.
 
-    Returns:
+    Returns :
         type: Description of return value.
 
-    Raises:
+    Raises :
         ExceptionType: Description of when this exception is raised.
     """
 
@@ -50,7 +50,7 @@ Coding rules (strictly enforced):
 
     Detailed description of the class.
 
-    Attributes:
+    Attributes :
         attribute1 (type): Description of attribute1.
         attribute2 (type): Description of attribute2.
     """
@@ -59,5 +59,3 @@ Coding rules (strictly enforced):
 7. Code must be low-coupling and high-cohesion; implement only basic functionality, no redundant error handling, follow KISS.
 8. Variable names: English, snake_case.
 9. Every script must expose a command-line interface using argparse and provide `-h` help.
-
-Output only Python code that satisfies every rule above; do not add extra explanations unless requested.

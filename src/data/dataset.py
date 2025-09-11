@@ -19,6 +19,29 @@ import torch
 from torch.utils.data import Dataset
 
 
+def _load_feature_safe(feature_path: str):
+    """
+    Load a feature file allowing necessary numpy globals if trusted.
+
+    Try to load with weights_only=True while allowlisting the numpy
+    reconstruct function. If that fails, fall back to legacy loading.
+
+    Args :
+        feature_path (str): Path to the .pt feature file.
+
+    Returns :
+        Any: Loaded object from the file.
+
+    Raises :
+        Exception: Propagates torch.load exceptions if both attempts fail.
+    """
+    try:
+        with torch.serialization.safe_globals([np._core.multiarray._reconstruct]):
+            return torch.load(feature_path, map_location="cpu", weights_only=True)
+    except Exception:
+        return torch.load(feature_path, map_location="cpu", weights_only=False)
+
+
 class EmotionDataset(Dataset):
     """
     Dataset class for loading wav2vec2 features and emotion labels.
@@ -223,7 +246,7 @@ class EmotionDataset(Dataset):
         feature_path = self._get_feature_path(filename)
 
         try:
-            features_data = torch.load(feature_path, map_location="cpu")
+            features_data = _load_feature_safe(feature_path)
         except Exception as e:
             raise FileNotFoundError(f"Failed to load feature file {feature_path}: {e}")
 

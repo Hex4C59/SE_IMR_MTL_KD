@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Batch extraction of wav2vec2 features for speech emotion recognition.
+Batch extraction of HuBERT features for speech emotion recognition.
 
 This module provides a command-line interface to extract hidden states from
-wav2vec2 models for a dataset of audio files. Features are saved in .pt format
+HuBERT models for a dataset of audio files. Features are saved in .pt format
 for downstream emotion regression/classification tasks. Supports chunked
 processing for long audio and flexible layer selection.
 
 Example :
-    >>> python scripts/extract_wav2vec2.py \
-            --ckpt_dir pretrain_model/wav2vec2-base-100h \
+    >>> python scripts/extract_hubert.py \
+            --ckpt_dir pretrain_model/hubert-base-100h \
             --data_root data/raw \
             --out_root data/processed/features \
             --layer 12
@@ -23,7 +23,6 @@ __maintainer__ = "Liu Yang"
 __email__ = "yang.liu6@siat.ac.cn"
 __last_updated__ = "2025-11-15"
 
-from __future__ import annotations
 
 import argparse
 from pathlib import Path
@@ -32,32 +31,21 @@ from typing import List, Tuple
 import numpy as np
 import soundfile as sf
 import torch
-from transformers import Wav2Vec2Config, Wav2Vec2Model
+from transformers import HubertConfig, HubertModel
 
 
-class Wav2Vec2Extractor:
+class HubertExtractor:
     """
-    Lightweight wav2vec2 feature extractor.
+    Lightweight HuBERT feature extractor.
 
-    Args:
-        ckpt_dir: Directory containing HuggingFace 'config.json' and 'pytorch_model.bin'
-        device: Torch device ('cuda' or 'cpu')
-        max_chunk: Max raw samples per forward (e.g., 1_600_000 ≈ 100 s @ 16 kHz)
+    Detailed description of the class.
 
-    Returns:
-        None
-
-    Raises:
-        FileNotFoundError: When files are missing
-
-    Examples:
-        >>> ext = Wav2Vec2Extractor("pretrain_model/wav2vec2-base-100h", "cpu")
-        >>> x = np.zeros(16000, dtype=np.float32)
-        >>> t = torch.from_numpy(x)[None, :]
-        >>> with torch.no_grad():
-        ...     y = ext.model(t.to(ext.device), output_hidden_states=True)
-        ...     _ = y.last_hidden_state
-
+    Attributes :
+        model (HubertModel): HuggingFace HuBERT model.
+        device (torch.device): Device for computation.
+        sample_rate (int): Expected sample rate (Hz).
+        max_chunk (int): Max samples per forward pass.
+        model_name (str): Pretrained model folder name.
     """
 
     def __init__(self, ckpt_dir: str, device: str, max_chunk: int = 1_600_000):
@@ -66,8 +54,8 @@ class Wav2Vec2Extractor:
         if not cfg_path.exists() or not bin_path.exists():
             raise FileNotFoundError("Missing config.json or pytorch_model.bin")
 
-        config = Wav2Vec2Config.from_pretrained(ckpt_dir)
-        self.model = Wav2Vec2Model.from_pretrained(
+        config = HubertConfig.from_pretrained(ckpt_dir)
+        self.model = HubertModel.from_pretrained(
             ckpt_dir, config=config, local_files_only=True
         )
         self.model.eval()
@@ -76,31 +64,20 @@ class Wav2Vec2Extractor:
 
         self.sample_rate = 16_000
         self.max_chunk = max_chunk
-
-        # 获取预训练模型文件夹名称
         self.model_name = Path(ckpt_dir).name
 
     def read_audio(self, path: str) -> np.ndarray:
         """
         Read an audio file, convert to mono, resample if needed.
 
-        Args:
-            path: Audio file path
+        Args :
+            path (str): Audio file path.
 
-        Returns:
-            Float32 mono waveform at 16 kHz
+        Returns :
+            np.ndarray: Float32 mono waveform at 16 kHz.
 
-        Raises:
-            RuntimeError: When reading audio fails
-
-        Examples:
-            >>> # doctest: +SKIP
-            >>> import numpy as np
-            >>> ext = Wav2Vec2Extractor("ckpt", "cpu")
-            >>> wav = ext.read_audio("a.wav")
-            >>> isinstance(wav, np.ndarray)
-            True
-
+        Raises :
+            RuntimeError: When reading audio fails.
         """
         wav, sr = sf.read(path, always_2d=False)
         if wav.ndim == 2:
@@ -120,22 +97,14 @@ class Wav2Vec2Extractor:
         """
         Standardize waveform to zero mean and unit variance.
 
-        Args:
-            x: Tensor shape (1, T)
+        Args :
+            x (torch.Tensor): Tensor shape (1, T).
 
-        Returns:
-            Normalized tensor (1, T)
+        Returns :
+            torch.Tensor: Normalized tensor (1, T).
 
-        Raises:
+        Raises :
             None
-
-        Examples:
-            >>> import torch
-            >>> ext = Wav2Vec2Extractor("ckpt", "cpu")
-            >>> y = ext._norm(torch.ones(1, 4))
-            >>> y.shape
-            torch.Size([1, 4])
-
         """
         mean = x.mean(dim=1, keepdim=True)
         std = x.std(dim=1, keepdim=True).clamp_min(1e-6)
@@ -145,27 +114,15 @@ class Wav2Vec2Extractor:
         """
         Extract hidden states from the specified transformer layer.
 
-        Note: HuggingFace returns 'hidden_states' with length L+1.
-        Index 0 is the output before the first transformer block.
-        Here, 'layer' starts from 1..L, and out-of-range falls back to last.
+        Args :
+            wav_path (str): Path to a wav file.
+            layer (int): Transformer layer index (1..num_hidden_layers).
 
-        Args:
-            wav_path: Path to a wav file
-            layer: Transformer layer index (1..num_hidden_layers)
+        Returns :
+            torch.Tensor: Tensor of shape (T', D).
 
-        Returns:
-            Tensor of shape (T', 768) for base model
-
-        Raises:
+        Raises :
             None
-
-        Examples:
-            >>> # doctest: +SKIP
-            >>> ext = Wav2Vec2Extractor("ckpt", "cpu")
-            >>> feats = ext.extract("a.wav", layer=12)
-            >>> feats.ndim
-            2
-
         """
         wav = self.read_audio(wav_path)
         t = torch.from_numpy(wav).to(self.device, dtype=torch.float32)[None, :]
@@ -187,29 +144,22 @@ class Wav2Vec2Extractor:
         """
         Save features to a .pt file.
 
-        Args:
-            feat: Feature tensor (T', D)
-            save_path: Path without extension
+        Args :
+            feat (torch.Tensor): Feature tensor (T', D).
+            save_path (str): Path without extension.
 
-        Returns:
+        Returns :
             None
 
-        Raises:
+        Raises :
             None
-
-        Examples:
-            >>> import torch, tempfile
-            >>> ext = Wav2Vec2Extractor("ckpt", "cpu")
-            >>> tmp = tempfile.NamedTemporaryFile(delete=True).name
-            >>> ext.save_feature(torch.zeros(2, 3), tmp)  # doctest: +ELLIPSIS
-
         """
         out = {"feature": feat.contiguous()}
         torch.save(out, f"{save_path}.pt")
 
 
 def process_split(
-    extractor: Wav2Vec2Extractor,
+    extractor: HubertExtractor,
     split: str,
     wav_dir: str,
     out_root: str,
@@ -218,26 +168,20 @@ def process_split(
     """
     Process a dataset split directory.
 
-    Args:
-        extractor: Feature extractor instance
-        split: Split name ('train'|'validation'|'test')
-        wav_dir: Directory containing wav files
-        out_root: Root dir to save features
-        layer: Transformer layer index
+    Args :
+        extractor (HubertExtractor): Feature extractor instance.
+        split (str): Split name ('train'|'validation'|'test').
+        wav_dir (str): Directory containing wav files.
+        out_root (str): Root dir to save features.
+        layer (int): Transformer layer index.
 
-    Returns:
-        Tuple of (processed_count, total_count)
+    Returns :
+        Tuple[int, int]: (processed_count, total_count).
 
-    Raises:
+    Raises :
         None
-
-    Examples:
-        >>> # doctest: +SKIP
-        >>> proc, total = process_split(ext, "train", "wav/train", "feat", 12)
-
     """
     wav_dir_p = Path(wav_dir)
-    # 使用预训练模型文件夹名称+层数作为输出文件夹名
     feat_dirname = f"{extractor.model_name}-l{layer}"
     out_dir = Path(out_root) / feat_dirname / split
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -265,23 +209,18 @@ def process_split(
 
 def main() -> None:
     """
-    CLI entry for batch feature extraction.
+    CLI entry for batch HuBERT feature extraction.
 
-    Args:
+    Args :
         None
 
-    Returns:
+    Returns :
         None
 
-    Raises:
-        SystemExit: When input dirs are invalid
-
-    Examples:
-        >>> # doctest: +SKIP
-        >>> main()
-
+    Raises :
+        SystemExit: When input dirs are invalid.
     """
-    parser = argparse.ArgumentParser(description="Extract wav2vec2 features")
+    parser = argparse.ArgumentParser(description="Extract HuBERT features")
     parser.add_argument("--ckpt_dir", type=str, required=True)
     parser.add_argument("--data_root", type=str, required=True)
     parser.add_argument("--out_root", type=str, required=True)
@@ -292,7 +231,7 @@ def main() -> None:
 
     device = "cuda" if torch.cuda.is_available() and args.device == "cuda" else "cpu"
 
-    extractor = Wav2Vec2Extractor(
+    extractor = HubertExtractor(
         ckpt_dir=args.ckpt_dir, device=device, max_chunk=args.max_chunk
     )
 

@@ -53,17 +53,17 @@ def compute_metrics(labels, predictions):
     """
     Compute regression metrics for VAD prediction.
 
-    Args:
+    Args :
         labels (numpy.ndarray): Ground truth labels [batch_size, 3]
         predictions (numpy.ndarray): Predicted values [batch_size, 3]
 
-    Returns:
+    Returns :
         dict: Dictionary containing various metrics
 
-    Raises:
+    Raises :
         None
 
-    Examples:
+    Examples :
         >>> labels = np.random.randn(100, 3)
         >>> predictions = np.random.randn(100, 3)
         >>> metrics = compute_metrics(labels, predictions)

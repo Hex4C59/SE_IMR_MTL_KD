@@ -16,17 +16,6 @@ __maintainer__ = "Liu Yang"
 __email__ = "yang.liu6@siat.ac.cn"
 __last_updated__ = "2025-11-15"
 
-"""
-One-line summary of the class.
-
-Detailed description of the class.
-
-Attributes:
-    attribute1 (type): Description of attribute1.
-    attribute2 (type): Description of attribute2.
-"""
-
-
 import argparse
 import os
 from datetime import datetime
@@ -47,35 +36,70 @@ from utils.logger import ExperimentLogger
 from utils.visualization import plot_training_summary
 
 
-def create_experiment_dir(base_dir: str, task_type: str = "train") -> str:
+def _get_feature_id_from_config(config: dict) -> str:
     """
-    Create experiment directory with timestamp.
+    Extract a short feature identifier from the config.
 
-    Args:
-        base_dir: Base directory for experiments
-        task_type: Type of task ('train', 'eval', 'test')
+    Detailed description of the function.
 
-    Returns:
-        Path to created experiment directory
+    Args :
+        config (dict): Configuration dictionary loaded from YAML.
 
-    Raises:
+    Returns :
+        str: Short feature identifier to append to experiment dir.
+
+    Raises :
         None
+    """
+    data = config.get("data", {}) if isinstance(config, dict) else {}
+    candidates = [
+        "feature_name",
+        "feature_extractor",
+        "feature_type",
+        "features_name",
+        "feature",
+    ]
+    for key in candidates:
+        val = data.get(key)
+        if val:
+            return str(val).replace(" ", "-")
+    features_dir = data.get("features_dir", "")
+    if features_dir:
+        base = os.path.basename(features_dir.rstrip(os.sep))
+        if base:
+            return base.replace(" ", "-")
+    return "unknown_features"
 
-    Examples:
-        >>> exp_dir = create_experiment_dir("runs", "train")
-        >>> print("train" in exp_dir and "2025" in exp_dir)
-        True
 
+def create_experiment_dir(
+    base_dir: str, task_type: str = "train", feature_id: str = ""
+) -> str:
+    """
+    Create experiment directory with timestamp and optional feature id.
+
+    Detailed description of the function.
+
+    Args :
+        base_dir (str): Base directory for experiments.
+        task_type (str): Type of task ('train', 'eval', 'test').
+        feature_id (str): Optional short feature identifier to append.
+
+    Returns :
+        str: Path to created experiment directory.
+
+    Raises :
+        None
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    exp_name = f"{task_type}_{timestamp}"
+    suffix = f"_{feature_id}" if feature_id else ""
+    exp_name = f"{task_type}_{timestamp}{suffix}"
     exp_dir = os.path.join(base_dir, exp_name)
     os.makedirs(exp_dir, exist_ok=True)
 
-    # 保存实验配置信息
     info_file = os.path.join(exp_dir, "experiment_info.txt")
     with open(info_file, "w") as f:
         f.write(f"Task Type: {task_type}\n")
+        f.write(f"Feature: {feature_id}\n")
         f.write(f"Start Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"Experiment Directory: {exp_dir}\n")
 
@@ -287,9 +311,12 @@ def main():
     # Get use_classification from config
     use_classification = config["data"].get("use_classification", True)
 
+    # Determine feature id to append to experiment folder
+    feature_id = _get_feature_id_from_config(config)
+
     # Create experiment directory with timestamp
     base_save_dir = config["output"]["save_dir"]
-    exp_dir = create_experiment_dir(base_save_dir, "train")
+    exp_dir = create_experiment_dir(base_save_dir, "train", feature_id)
 
     # Setup logging
     logger = ExperimentLogger(exp_dir)

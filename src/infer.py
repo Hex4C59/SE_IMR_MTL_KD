@@ -39,31 +39,57 @@ from models.mtl_GRU_model import BaselineEmotionGRU
 from utils.logger import ExperimentLogger
 
 
+def _get_feature_id_from_config(config: dict) -> str:
+    """
+    Extract a short feature identifier from the config.
+
+    Args :
+        config (dict): Configuration dictionary.
+
+    Returns :
+        str: Feature identifier string.
+    """
+    data = config.get("data", {}) if isinstance(config, dict) else {}
+    candidates = [
+        "feature_name",
+        "feature_extractor",
+        "feature_type",
+        "features_name",
+        "feature",
+    ]
+    for key in candidates:
+        val = data.get(key)
+        if val:
+            return str(val).replace(" ", "-")
+    features_dir = data.get("features_dir", "")
+    if features_dir:
+        base = os.path.basename(features_dir.rstrip(os.sep))
+        if base:
+            return base.replace(" ", "-")
+    return "unknown_features"
+
+
 def create_experiment_dir(
-    base_dir: str, task_type: str = "test", write_info: bool = True
+    base_dir: str,
+    task_type: str = "test",
+    write_info: bool = True,
+    feature_id: str = "",
 ) -> str:
     """
-    Create an experiment directory with timestamp.
+    Create an experiment directory with timestamp and optional feature id.
 
-    Args:
-        base_dir: Base directory for experiments.
-        task_type: Task type label, e.g. "test", "eval".
-        write_info: Whether to write an experiment_info.txt file.
+    Args :
+        base_dir (str): Base directory for experiments.
+        task_type (str): Task type label.
+        write_info (bool): Whether to write info file.
+        feature_id (str): Optional feature id to append to folder name.
 
-    Returns:
-        Path to the created experiment directory.
-
-    Raises:
-        OSError: If directory creation fails.
-
-    Example:
-        >>> create_experiment_dir(
-        ...     "runs/infer", "test", write_info=False
-        ... ).startswith("runs/infer_test_")
-
+    Returns :
+        str: Path to the created experiment directory.
     """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    exp_name = f"{task_type}_{timestamp}"
+    suffix = f"_{feature_id}" if feature_id else ""
+    exp_name = f"{task_type}_{timestamp}{suffix}"
     exp_dir = os.path.join(base_dir, exp_name)
     os.makedirs(exp_dir, exist_ok=True)
 
@@ -71,6 +97,7 @@ def create_experiment_dir(
         info_file = os.path.join(exp_dir, "experiment_info.txt")
         with open(info_file, "w") as f:
             f.write(f"Task Type: {task_type}\n")
+            f.write(f"Feature: {feature_id}\n")
             f.write(f"Start Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"Experiment Directory: {exp_dir}\n")
 
@@ -168,12 +195,6 @@ def main() -> None:
     Raises:
         None
 
-    Example:
-        >>> # python src/infer.py \
-        ...     --config configs/infer.yaml \
-        ...     --checkpoint path/to.ckpt \
-        ...     --split test
-
     """
     parser = argparse.ArgumentParser(description="Inference with VAD regression model")
     parser.add_argument(
@@ -192,11 +213,12 @@ def main() -> None:
 
     use_classification = config["data"].get("use_classification", True)
 
-    # Create experiment directory
-    # For infer we do not write experiment_info.txt
-    # (avoid side-effect used by train/eval)
+    feature_id = _get_feature_id_from_config(config)
+    # Create experiment directory (do not write experiment_info.txt)
     base_save_dir = config["output"]["save_dir"]
-    exp_dir = create_experiment_dir(base_save_dir, "test", write_info=False)
+    exp_dir = create_experiment_dir(
+        base_save_dir, "test", write_info=False, feature_id=feature_id
+    )
 
     # Setup logger
     logger = ExperimentLogger(exp_dir)
