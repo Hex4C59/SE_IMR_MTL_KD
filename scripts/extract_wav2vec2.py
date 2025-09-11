@@ -26,8 +26,7 @@ from transformers import Wav2Vec2Config, Wav2Vec2Model
 
 
 class Wav2Vec2Extractor:
-    """
-    Lightweight wav2vec2 feature extractor.
+    """Lightweight wav2vec2 feature extractor.
 
     Args:
         ckpt_dir: Directory containing HuggingFace 'config.json' and 'pytorch_model.bin'
@@ -65,10 +64,12 @@ class Wav2Vec2Extractor:
 
         self.sample_rate = 16_000
         self.max_chunk = max_chunk
+        
+        # 获取预训练模型文件夹名称
+        self.model_name = Path(ckpt_dir).name
 
     def read_audio(self, path: str) -> np.ndarray:
-        """
-        Read an audio file, convert to mono, resample if needed.
+        """Read an audio file, convert to mono, resample if needed.
 
         Args:
             path: Audio file path
@@ -92,7 +93,6 @@ class Wav2Vec2Extractor:
             wav = wav.mean(-1)
         wav = wav.astype(np.float32, copy=False)
         if sr != self.sample_rate:
-            # Simple resample by linear interpolation (KISS, no extra deps)
             dur = wav.shape[0] / float(sr)
             tgt_len = int(dur * self.sample_rate)
             idx = np.linspace(0, wav.shape[0] - 1, tgt_len, dtype=np.float32)
@@ -103,8 +103,7 @@ class Wav2Vec2Extractor:
         return wav
 
     def _norm(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Standardize waveform to zero mean and unit variance.
+        """Standardize waveform to zero mean and unit variance.
 
         Args:
             x: Tensor shape (1, T)
@@ -127,8 +126,7 @@ class Wav2Vec2Extractor:
         return (x - mean) / std
 
     def extract(self, wav_path: str, layer: int = 12) -> torch.Tensor:
-        """
-        Extract hidden states from the specified transformer layer.
+        """Extract hidden states from the specified transformer layer.
 
         Note: HuggingFace returns 'hidden_states' with length L+1.
         Index 0 is the output before the first transformer block.
@@ -168,8 +166,7 @@ class Wav2Vec2Extractor:
         return feat.cpu()
 
     def save_feature(self, feat: torch.Tensor, save_path: str) -> None:
-        """
-        Save features to a .pt file.
+        """Save features to a .pt file.
 
         Args:
             feat: Feature tensor (T', D)
@@ -198,31 +195,32 @@ def process_split(
     out_root: str,
     layer: int,
 ) -> Tuple[int, int]:
-    """
-    Process a dataset split directory.
+    """Process a dataset split directory.
 
-    Args :
+    Args:
         extractor: Feature extractor instance
         split: Split name ('train'|'validation'|'test')
         wav_dir: Directory containing wav files
         out_root: Root dir to save features
         layer: Transformer layer index
 
-    Returns :
+    Returns:
         Tuple of (processed_count, total_count)
 
-    Raises :
+    Raises:
         None
 
-    Examples :
+    Examples:
         >>> # doctest: +SKIP
         >>> proc, total = process_split(ext, "train", "wav/train", "feat", 12)
     """
     wav_dir_p = Path(wav_dir)
-    # Save to directory with explicit layer suffix, e.g., wav2vec2-base-100h-l7
-    feat_dirname = f"wav2vec2-base-100h-l{layer}"
+    # 使用预训练模型文件夹名称+层数作为输出文件夹名
+    feat_dirname = f"{extractor.model_name}-l{layer}"
     out_dir = Path(out_root) / feat_dirname / split
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Saving features to: {out_dir}")
 
     wav_files = sorted([p for p in wav_dir_p.iterdir() if p.suffix == ".wav"])
     total = len(wav_files)
@@ -244,8 +242,7 @@ def process_split(
 
 
 def main() -> None:
-    """
-    CLI entry for batch feature extraction.
+    """CLI entry for batch feature extraction.
 
     Args:
         None
@@ -265,7 +262,7 @@ def main() -> None:
     parser.add_argument("--data_root", type=str, required=True)
     parser.add_argument("--out_root", type=str, required=True)
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--layer", type=int, default=8)
+    parser.add_argument("--layer", type=int, default=12)
     parser.add_argument("--max_chunk", type=int, default=1_600_000)
     args = parser.parse_args()
 
@@ -274,6 +271,10 @@ def main() -> None:
     extractor = Wav2Vec2Extractor(
         ckpt_dir=args.ckpt_dir, device=device, max_chunk=args.max_chunk
     )
+
+    print(f"Using model: {extractor.model_name}")
+    print(f"Extracting layer: {args.layer}")
+    print(f"Output folder will be: {extractor.model_name}-l{args.layer}")
 
     splits = ["test", "train", "validation"]
     total_done = 0

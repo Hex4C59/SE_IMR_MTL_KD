@@ -39,6 +39,7 @@ class EmotionDataset(Dataset):
         >>> dataset = EmotionDataset("data/features", "labels.csv", "train")
         >>> sample = dataset[0]
         >>> print(sample['features'].shape)
+
     """
 
     def __init__(
@@ -184,8 +185,12 @@ class EmotionDataset(Dataset):
         classification_samples = sum(self.labels_df["use_for_classification"])
         regression_only_samples = len(self.labels_df) - classification_samples
 
-        print(f"Loaded {len(self.labels_df)} total valid samples for {self.split} split")
-        print(f"  - Used for BOTH regression AND classification: {classification_samples}")
+        print(
+            f"Loaded {len(self.labels_df)} total valid samples for {self.split} split"
+        )
+        print(
+            f"  - Used for BOTH regression AND classification: {classification_samples}"
+        )
         print(f"  - Used for regression ONLY: {regression_only_samples}")
         print(f"  - All {len(self.labels_df)} samples used for VAD regression training")
 
@@ -194,7 +199,8 @@ class EmotionDataset(Dataset):
         return len(self.labels_df)
 
     def __getitem__(self, idx: int) -> dict:
-        """Get a sample from the dataset.
+        """
+        Get a sample from the dataset.
 
         Args:
             idx: Sample index
@@ -209,6 +215,7 @@ class EmotionDataset(Dataset):
             >>> dataset = EmotionDataset("data/features", "labels.csv")
             >>> sample = dataset[0]
             >>> print(sample.keys())
+
         """
         row = self.labels_df.iloc[idx]
         filename = row["FileName"]
@@ -221,7 +228,12 @@ class EmotionDataset(Dataset):
             raise FileNotFoundError(f"Failed to load feature file {feature_path}: {e}")
 
         if isinstance(features_data, dict):
-            possible_keys = ["features", "feature", "last_hidden_state", "hidden_states"]
+            possible_keys = [
+                "features",
+                "feature",
+                "last_hidden_state",
+                "hidden_states",
+            ]
             features = None
 
             for key in possible_keys:
@@ -245,7 +257,9 @@ class EmotionDataset(Dataset):
         elif not isinstance(features, torch.Tensor):
             features = torch.tensor(features)
 
-        vad_raw = np.array([row["EmoVal"], row["EmoAct"], row["EmoDom"]], dtype=np.float32)
+        vad_raw = np.array(
+            [row["EmoVal"], row["EmoAct"], row["EmoDom"]], dtype=np.float32
+        )
         vad = (vad_raw - 4.0) / 3.0
 
         use_for_classification = row["use_for_classification"]
@@ -264,7 +278,8 @@ class EmotionDataset(Dataset):
 
 
 def collate_fn(batch: list) -> dict:
-    """Handle variable length sequences with custom collation.
+    """
+    Handle variable length sequences with custom collation.
 
     Args:
         batch: List of samples from the dataset
@@ -280,12 +295,15 @@ def collate_fn(batch: list) -> dict:
         >>> loader = DataLoader(dataset, batch_size=32, collate_fn=collate_fn)
         >>> batch = next(iter(loader))
         >>> print(batch['features'].shape)
+
     """
     features = [item["features"] for item in batch]
 
     vad = torch.stack([item["vad"] for item in batch])
     emotion_class = torch.stack([item["emotion_class"] for item in batch])
-    use_for_classification = torch.tensor([item["use_for_classification"] for item in batch])
+    use_for_classification = torch.tensor(
+        [item["use_for_classification"] for item in batch]
+    )
     filenames = [item["filename"] for item in batch]
 
     features = torch.nn.utils.rnn.pad_sequence(features, batch_first=True)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-train.py
+train.py.
 
 Training entry point for VAD regression model.
 
@@ -13,6 +13,7 @@ Project: https://github.com/Hex4C59/SE_IMR_MTL_KD
 
 import argparse
 import os
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -26,10 +27,47 @@ from losses.multitask_losses import MultiTaskLoss
 from metrics.regression_metrics import compute_metrics
 from models.mtl_GRU_model import BaselineEmotionGRU
 from utils.checkpoint import save_checkpoint
+from utils.logger import ExperimentLogger
 from utils.visualization import plot_training_summary
 
 
-def train_epoch(model, dataloader, optimizer, criterion, device):
+def create_experiment_dir(base_dir: str, task_type: str = "train") -> str:
+    """
+    Create experiment directory with timestamp.
+
+    Args:
+        base_dir: Base directory for experiments
+        task_type: Type of task ('train', 'eval', 'test')
+
+    Returns:
+        Path to created experiment directory
+
+    Raises:
+        None
+
+    Examples:
+        >>> exp_dir = create_experiment_dir("runs", "train")
+        >>> print("train" in exp_dir and "2025" in exp_dir)
+        True
+
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    exp_name = f"{task_type}_{timestamp}"
+    exp_dir = os.path.join(base_dir, exp_name)
+    os.makedirs(exp_dir, exist_ok=True)
+
+    # 保存实验配置信息
+    info_file = os.path.join(exp_dir, "experiment_info.txt")
+    with open(info_file, "w") as f:
+        f.write(f"Task Type: {task_type}\n")
+        f.write(f"Start Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Experiment Directory: {exp_dir}\n")
+
+    print(f"Experiment directory created: {exp_dir}")
+    return exp_dir
+
+
+def train_epoch(model, dataloader, optimizer, criterion, device, logger):
     """Train for one epoch with multi-task learning."""
     model.train()
     total_loss = 0
@@ -37,7 +75,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
     total_classification_loss = 0
 
     progress_bar = tqdm(dataloader, desc="Training")
-    for batch in progress_bar:
+    for batch_idx, batch in enumerate(progress_bar):
         optimizer.zero_grad()
 
         features = batch["features"].to(device)
@@ -71,18 +109,34 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
             }
         )
 
+        # Log batch details every 100 batches
+        if batch_idx % 100 == 0:
+            logger.log_batch_details(
+                batch_idx,
+                len(dataloader),
+                total_loss_batch.item(),
+                loss_dict["regression_loss"].item(),
+                loss_dict["classification_loss"].item(),
+            )
+
     avg_total_loss = total_loss / len(dataloader)
     avg_regression_loss = total_regression_loss / len(dataloader)
     avg_classification_loss = total_classification_loss / len(dataloader)
 
-    return {
+    train_loss_dict = {
         "total_loss": avg_total_loss,
         "regression_loss": avg_regression_loss,
         "classification_loss": avg_classification_loss,
     }
 
+    logger.log_train_epoch_complete(
+        avg_total_loss, avg_regression_loss, avg_classification_loss
+    )
 
-def validate(model, dataloader, criterion, device, use_classification=True):
+    return train_loss_dict
+
+
+def validate(model, dataloader, criterion, device, logger, use_classification=True):
     """Validate the model with single-task or multi-task learning."""
     model.eval()
     total_loss = 0
@@ -100,22 +154,26 @@ def validate(model, dataloader, criterion, device, use_classification=True):
         for batch in progress_bar:
             features = batch["features"].to(device)
             vad = batch["vad"].to(device)
-            
+
             outputs = model(features)
 
             targets = {"vad": vad}
-            
+
             if use_classification:
                 emotion_class = batch["emotion_class"].to(device)
                 use_for_classification = batch["use_for_classification"].to(device)
-                targets.update({
-                    "emotion_class": emotion_class,
-                    "use_for_classification": use_for_classification,
-                })
+                targets.update(
+                    {
+                        "emotion_class": emotion_class,
+                        "use_for_classification": use_for_classification,
+                    }
+                )
                 all_emotion_labels.append(emotion_class.cpu().numpy())
                 all_classification_masks.append(use_for_classification.cpu().numpy())
                 if "classification" in outputs:
-                    all_classification_preds.append(outputs["classification"].cpu().numpy())
+                    all_classification_preds.append(
+                        outputs["classification"].cpu().numpy()
+                    )
 
             loss_dict = criterion(outputs, targets)
 
@@ -148,17 +206,19 @@ def validate(model, dataloader, criterion, device, use_classification=True):
         )
 
         if valid_classification_mask.any():
-            valid_classification_preds = all_classification_preds[valid_classification_mask]
+            valid_classification_preds = all_classification_preds[
+                valid_classification_mask
+            ]
             valid_emotion_labels = all_emotion_labels[valid_classification_mask]
             classification_preds = np.argmax(valid_classification_preds, axis=1)
             classification_accuracy = np.mean(
                 classification_preds == valid_emotion_labels
             )
-            print(
-                f"Classification samples: {valid_classification_mask.sum()}/{len(all_emotion_labels)}"
+            logger.log_classification_samples(
+                valid_classification_mask.sum(), len(all_emotion_labels)
             )
         else:
-            print("No valid classification samples in validation set")
+            logger.warning("No valid classification samples in validation set")
 
     metrics = {
         "loss": avg_total_loss,
@@ -169,6 +229,14 @@ def validate(model, dataloader, criterion, device, use_classification=True):
         **regression_metrics,
     }
 
+    logger.log_validation_complete(
+        avg_total_loss,
+        regression_metrics["total_ccc"],
+        regression_metrics["v_ccc"],
+        regression_metrics["a_ccc"],
+        regression_metrics["d_ccc"],
+    )
+
     return metrics
 
 
@@ -177,6 +245,14 @@ def load_config(config_path):
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
     return config
+
+
+def save_experiment_config(config, exp_dir):
+    """Save experiment configuration to the experiment directory."""
+    config_save_path = os.path.join(exp_dir, "config.yaml")
+    with open(config_save_path, "w") as f:
+        yaml.dump(config, f, default_flow_style=False)
+    print(f"Configuration saved to: {config_save_path}")
 
 
 def main():
@@ -194,23 +270,36 @@ def main():
 
     # Get use_classification from config
     use_classification = config["data"].get("use_classification", True)
-    print(f"Training mode: {'Multi-task' if use_classification else 'Single-task (VAD regression only)'}")
+
+    # Create experiment directory with timestamp
+    base_save_dir = config["output"]["save_dir"]
+    exp_dir = create_experiment_dir(base_save_dir, "train")
+
+    # Setup logging
+    logger = ExperimentLogger(exp_dir)
+
+    # Log experiment start
+    logger.log_experiment_start(args.config, use_classification)
+
+    # Save experiment configuration
+    save_experiment_config(config, exp_dir)
+    logger.info("Experiment configuration saved")
 
     seed = config["seed"]
     torch.manual_seed(seed)
     np.random.seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
+    logger.info(f"Random seed set to: {seed}")
 
     if config["device"] == "cuda" and torch.cuda.is_available():
         device = torch.device(f"cuda:{config.get('gpu_id', 0)}")
     else:
         device = torch.device("cpu")
-    print(f"Using device: {device}")
+    logger.info(f"Using device: {device}")
 
-    save_dir = config["output"]["save_dir"]
-    os.makedirs(save_dir, exist_ok=True)
-
+    # Load datasets
+    logger.info("Loading datasets...")
     train_dataset = EmotionDataset(
         config["data"]["features_dir"], config["data"]["labels_file"], split="train"
     )
@@ -219,6 +308,7 @@ def main():
         config["data"]["labels_file"],
         split="validation",
     )
+    logger.log_dataset_info(len(train_dataset), len(val_dataset))
 
     train_loader = DataLoader(
         train_dataset,
@@ -237,6 +327,8 @@ def main():
         pin_memory=config["data"]["pin_memory"],
     )
 
+    # Initialize model
+    logger.info("Initializing model...")
     model = BaselineEmotionGRU(
         input_size=config["model"]["input_size"],
         hidden_size=config["model"]["hidden_size"],
@@ -244,7 +336,12 @@ def main():
         output_size=config["model"]["output_size"],
         num_classes=config["model"]["num_classes"],
         dropout=config["model"]["dropout"],
+        use_classification=use_classification,
     ).to(device)
+
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.log_model_info(total_params, trainable_params)
 
     criterion = MultiTaskLoss(
         classification_weight=config["training"]["classification_weight"],
@@ -254,48 +351,69 @@ def main():
     optimizer = optim.Adam(
         model.parameters(),
         lr=config["training"]["learning_rate"],
+        weight_decay=config["training"]["weight_decay"],
+    )
+    logger.log_optimizer_info(
+        config["training"]["learning_rate"], config["training"]["weight_decay"]
     )
 
     early_stopping_patience = config["training"]["early_stopping"]["patience"]
     early_stopping_min_delta = config["training"]["early_stopping"]["min_delta"]
     early_stopping_counter = 0
     best_val_loss = float("inf")
+    best_epoch = 0
 
     num_epochs = config["training"]["num_epochs"]
     train_losses_list = []
     val_metrics_list = []
 
-    print("Starting training...")
-    for epoch in range(num_epochs):
-        print(f"\nEpoch {epoch + 1}/{num_epochs}")
+    # Log training configuration
+    training_config = {
+        "num_epochs": num_epochs,
+        "early_stopping": config["training"]["early_stopping"],
+        "batch_size": config["data"]["batch_size"],
+    }
+    logger.log_training_config(training_config)
 
-        train_loss_dict = train_epoch(model, train_loader, optimizer, criterion, device)
+    logger.info("Starting training loop...")
+    for epoch in range(num_epochs):
+        epoch_start_time = datetime.now()
+        logger.log_epoch_start(epoch + 1, num_epochs)
+
+        train_loss_dict = train_epoch(
+            model, train_loader, optimizer, criterion, device, logger
+        )
         train_losses_list.append(train_loss_dict)
 
-        val_metrics = validate(model, val_loader, criterion, device, use_classification)
+        val_metrics = validate(
+            model, val_loader, criterion, device, logger, use_classification
+        )
         val_metrics_list.append(val_metrics)
 
-        print(f"Train Total Loss: {train_loss_dict['total_loss']:.4f}")
-        print(f"Train Regression Loss: {train_loss_dict['regression_loss']:.4f}")
-        if use_classification:
-            print(f"Train Classification Loss: {train_loss_dict['classification_loss']:.4f}")
-            print(f"Val Classification Accuracy: {val_metrics['classification_accuracy']:.4f}")
-        print(f"Val Total Loss: {val_metrics['total_loss']:.4f}")
-        print(f"Valence CCC: {val_metrics['v_ccc']:.4f}")
-        print(f"Arousal CCC: {val_metrics['a_ccc']:.4f}")
-        print(f"Dominance CCC: {val_metrics['d_ccc']:.4f}")
-        print(f"Average CCC: {val_metrics['total_ccc']:.4f}")
+        # Log epoch summary
+        epoch_time = (datetime.now() - epoch_start_time).total_seconds()
+        logger.log_epoch_summary(
+            epoch + 1, epoch_time, train_loss_dict, val_metrics, use_classification
+        )
 
+        # Log structured epoch results
+        logger.log_epoch_results(
+            epoch + 1, train_loss_dict, val_metrics, use_classification
+        )
+
+        # Early stopping check
         if val_metrics["loss"] < best_val_loss - early_stopping_min_delta:
             best_val_loss = val_metrics["loss"]
+            best_epoch = epoch + 1
             early_stopping_counter = 0
             save_checkpoint(
-                model, optimizer, epoch, save_dir, val_metrics, "best_model.pt"
+                model, optimizer, epoch, exp_dir, val_metrics, "best_model.pt"
             )
+            logger.log_best_model_saved(best_val_loss)
         else:
             early_stopping_counter += 1
-            print(
-                f"Early stopping counter: {early_stopping_counter}/{early_stopping_patience}"
+            logger.log_early_stopping_counter(
+                early_stopping_counter, early_stopping_patience
             )
 
         if (epoch + 1) % config["output"]["save_interval"] == 0:
@@ -303,22 +421,41 @@ def main():
                 model,
                 optimizer,
                 epoch,
-                save_dir,
+                exp_dir,
                 val_metrics,
                 f"checkpoint_epoch_{epoch + 1}.pt",
             )
+            logger.log_checkpoint_saved(epoch + 1)
 
-        plot_training_summary(train_losses_list, val_metrics_list, save_dir, use_classification)
+        # Generate training plots
+        plot_training_summary(
+            train_losses_list, val_metrics_list, exp_dir, use_classification
+        )
 
         if early_stopping_counter >= early_stopping_patience:
-            print(f"Early stopping triggered after {epoch + 1} epochs")
+            logger.log_early_stopping_triggered(epoch + 1)
             break
 
+    # Save final model
     save_checkpoint(
-        model, optimizer, num_epochs, save_dir, val_metrics_list[-1], "final_model.pt"
+        model, optimizer, num_epochs, exp_dir, val_metrics_list[-1], "final_model.pt"
+    )
+    logger.info("Final model saved")
+
+    # Save completion summary
+    early_stopping_triggered = early_stopping_counter >= early_stopping_patience
+    logger.save_completion_summary(
+        len(train_losses_list),
+        best_epoch,
+        best_val_loss,
+        val_metrics_list[-1]["total_ccc"],
+        early_stopping_triggered,
     )
 
-    print("\nTraining completed!")
+    # Log experiment end
+    logger.log_experiment_end(
+        best_epoch, best_val_loss, val_metrics_list[-1]["total_ccc"]
+    )
 
 
 if __name__ == "__main__":
