@@ -13,7 +13,9 @@ Example :
             --ckpt_dir pretrain_model/hubert-base-100h \
             --data_root data/raw \
             --out_root data/processed/features \
-            --layer 12
+            --layer 12 \
+            --device cuda \
+            --gpu_id 1
 """
 
 __author__ = "Liu Yang"
@@ -22,7 +24,6 @@ __license__ = "MIT"
 __maintainer__ = "Liu Yang"
 __email__ = "yang.liu6@siat.ac.cn"
 __last_updated__ = "2025-11-15"
-
 
 import argparse
 from pathlib import Path
@@ -48,7 +49,7 @@ class HubertExtractor:
         model_name (str): Pretrained model folder name.
     """
 
-    def __init__(self, ckpt_dir: str, device: str, max_chunk: int = 1_600_000):
+    def __init__(self, ckpt_dir: str, device: torch.device, max_chunk: int = 1_600_000):
         cfg_path = Path(ckpt_dir) / "config.json"
         bin_path = Path(ckpt_dir) / "pytorch_model.bin"
         if not cfg_path.exists() or not bin_path.exists():
@@ -59,7 +60,7 @@ class HubertExtractor:
             ckpt_dir, config=config, local_files_only=True
         )
         self.model.eval()
-        self.device = torch.device(device)
+        self.device = device
         self.model.to(self.device) # type: ignore
 
         self.sample_rate = 16_000
@@ -211,6 +212,8 @@ def main() -> None:
     """
     CLI entry for batch HuBERT feature extraction.
 
+    Detailed description of the function.
+
     Args :
         None
 
@@ -225,11 +228,15 @@ def main() -> None:
     parser.add_argument("--data_root", type=str, required=True)
     parser.add_argument("--out_root", type=str, required=True)
     parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--gpu_id", type=int, default=0, help="GPU device id (default: 0)")
     parser.add_argument("--layer", type=int, default=12)
     parser.add_argument("--max_chunk", type=int, default=1_600_000)
     args = parser.parse_args()
 
-    device = "cuda" if torch.cuda.is_available() and args.device == "cuda" else "cpu"
+    if args.device == "cuda" and torch.cuda.is_available():
+        device = torch.device(f"cuda:{args.gpu_id}")
+    else:
+        device = torch.device("cpu")
 
     extractor = HubertExtractor(
         ckpt_dir=args.ckpt_dir, device=device, max_chunk=args.max_chunk
@@ -238,6 +245,7 @@ def main() -> None:
     print(f"Using model: {extractor.model_name}")
     print(f"Extracting layer: {args.layer}")
     print(f"Output folder will be: {extractor.model_name}-l{args.layer}")
+    print(f"Using device: {device}")
 
     splits = ["test", "train", "validation"]
     total_done = 0

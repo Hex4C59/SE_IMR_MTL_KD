@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-multitask_losses.py
+multitask_losses.py.
 
 Date: 2025-09-10
 Author: Liu Yang
@@ -46,6 +46,7 @@ class MultiTaskLoss(nn.Module):
         ... }
         >>> loss_dict = criterion(outputs, targets)
         >>> print(loss_dict['total_loss'].shape)
+
     """
 
     def __init__(
@@ -59,7 +60,7 @@ class MultiTaskLoss(nn.Module):
         self.classification_weight = classification_weight
         self.use_classification = use_classification
         self.regression_loss = CCCLoss(alpha=alpha, beta=beta)
-        
+
         if self.use_classification:
             self.classification_loss = nn.CrossEntropyLoss(ignore_index=-1)
 
@@ -83,9 +84,10 @@ class MultiTaskLoss(nn.Module):
             >>> targets = {'vad': torch.randn(8, 3)}
             >>> out = criterion(outputs, targets)
             >>> print(out['total_loss'].shape)
+
         """
         reg_loss = self.regression_loss(predictions["regression"], targets["vad"])
-        
+
         if not self.use_classification:
             # Single-task learning: only regression loss
             return {
@@ -93,7 +95,7 @@ class MultiTaskLoss(nn.Module):
                 "regression_loss": reg_loss,
                 "classification_loss": torch.tensor(0.0, device=reg_loss.device),
             }
-        
+
         # Multi-task learning: regression + classification
         mask = targets.get("use_for_classification", None)
         if mask is not None and mask.any():
@@ -102,7 +104,7 @@ class MultiTaskLoss(nn.Module):
             cls_loss = self.classification_loss(cls_pred, cls_target)
         else:
             cls_loss = torch.tensor(0.0, device=predictions["classification"].device)
-        
+
         total_loss = reg_loss + self.classification_weight * cls_loss
         return {
             "total_loss": total_loss,

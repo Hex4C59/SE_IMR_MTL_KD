@@ -16,7 +16,8 @@ import torch.nn as nn
 
 
 class BaselineEmotionGRU(nn.Module):
-    """Baseline GRU model for emotion recognition.
+    """
+    Baseline GRU model for emotion recognition.
 
     Args:
         input_size: Input feature dimension
@@ -39,6 +40,7 @@ class BaselineEmotionGRU(nn.Module):
         >>> features = torch.randn(32, 100, 768)
         >>> outputs = model(features)
         >>> print('classification' in outputs)  # False for single-task
+
     """
 
     def __init__(
@@ -69,22 +71,6 @@ class BaselineEmotionGRU(nn.Module):
 
         if self.use_classification:
             self.classification_head = nn.Linear(embedding_dim, num_classes)
-
-        self._init_weights()
-
-    def _init_weights(self) -> None:
-        """Initialize model weights using Xavier initialization."""
-        for module in self.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.xavier_uniform_(module.weight)
-                if module.bias is not None:
-                    nn.init.constant_(module.bias, 0)
-            elif isinstance(module, nn.GRU):
-                for name, param in module.named_parameters():
-                    if "weight" in name:
-                        nn.init.xavier_uniform_(param)
-                    elif "bias" in name:
-                        nn.init.constant_(param, 0)
 
     def forward(self, x: torch.Tensor) -> dict:
         """
