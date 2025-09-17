@@ -7,7 +7,10 @@ Scan the label CSV and remove rows where the audio file does not exist
 in the specified audio directory. Save the cleaned CSV to a new file.
 
 Example:
-    >>> python clean_labels.py --label_file labels_concensus.csv --audio_dir organized_datasets/v1.6 --output_file labels_cleaned.csv
+    >>> python clean_labels.py \
+    --label_file labels_concensus.csv \
+    --audio_dir organized_datasets/v1.6 \
+    --output_file labels_cleaned.csv
 
 """
 

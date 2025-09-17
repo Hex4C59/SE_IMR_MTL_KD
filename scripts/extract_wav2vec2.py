@@ -71,7 +71,7 @@ class Wav2Vec2Extractor:
         )
         self.model.eval()
         self.device = torch.device(device)
-        self.model.to(self.device) # type: ignore
+        self.model.to(self.device)  # type: ignore
 
         self.sample_rate = 16_000
         self.max_chunk = max_chunk
@@ -285,11 +285,17 @@ def main() -> None:
     parser.add_argument("--data_root", type=str, required=True)
     parser.add_argument("--out_root", type=str, required=True)
     parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument(
+        "--gpu", type=int, default=0, help="Specify which GPU to use (default: 0)"
+    )
     parser.add_argument("--layer", type=int, default=12)
     parser.add_argument("--max_chunk", type=int, default=1_600_000)
     args = parser.parse_args()
 
-    device = "cuda" if torch.cuda.is_available() and args.device == "cuda" else "cpu"
+    if args.device == "cuda" and torch.cuda.is_available():
+        device = f"cuda:{args.gpu}"
+    else:
+        device = "cpu"
 
     extractor = Wav2Vec2Extractor(
         ckpt_dir=args.ckpt_dir, device=device, max_chunk=args.max_chunk
@@ -298,6 +304,9 @@ def main() -> None:
     print(f"Using model: {extractor.model_name}")
     print(f"Extracting layer: {args.layer}")
     print(f"Output folder will be: {extractor.model_name}-l{args.layer}")
+    print(
+        f"Selected device: {device} (GPU index: {args.gpu if device == 'cuda' else 'N/A'})"
+    )
 
     splits = ["test", "train", "validation"]
     total_done = 0

@@ -6,7 +6,10 @@ t-SNE 可视化 wav2vec2-base-100h 第12层特征.
 加载特征和标签，使用 t-SNE 降维并可视化，标签用于着色。
 
 Example:
-    >>> python visualize_tsne.py --feature_dir /path/to/features --label_file /path/to/labels.csv --label_column EmoAct
+    >>> python visualize_tsne.py \
+        --feature_dir /path/to/features \
+        --label_file /path/to/labels.csv \
+        --label_column EmoAct
 
 """
 
@@ -52,7 +55,7 @@ def load_features(feature_dir: str, file_list: List[str]) -> np.ndarray:
         tensor = feat["feature"]
         if hasattr(tensor, "ndim") and tensor.ndim == 2:
             tensor = tensor.mean(axis=0)
-        features.append(np.array(tensor))
+        features.append(np.asarray(tensor).astype(np.float32))
     return np.stack(features)
 
 
@@ -105,16 +108,37 @@ def main() -> None:
     tsne = TSNE(n_components=2, random_state=42)
     features_2d = tsne.fit_transform(features)
 
+    # 生成保存路径
+    feature_type = os.path.basename(os.path.normpath(args.feature_dir))
+    # 提取模型名称和数据集类型
+    feature_dir_parts = os.path.normpath(args.feature_dir).split(os.sep)
+    # 假设结构为 .../features_msp_1.6/<模型名>/<数据集类型>
+    if len(feature_dir_parts) >= 2:
+        model_name = feature_dir_parts[-2]
+        dataset_type = feature_dir_parts[-1]
+    else:
+        model_name = "unknown_model"
+        dataset_type = feature_dir_parts[-1] if feature_dir_parts else "unknown"
+
+    label_map = {"EmoAct": "Act", "EmoVal": "Val", "EmoDom": "Dom"}
+    label_short = label_map.get(args.label_column, args.label_column)
+    save_dir = os.path.join("runs", "tsne", str(label_short))
+    os.makedirs(save_dir, exist_ok=True)
+    save_name = f"tsne_{model_name}_{dataset_type}_{label_short}.png"
+    save_path = os.path.join(save_dir, save_name)
+
     plt.figure(figsize=(8, 6))
     scatter = plt.scatter(
         features_2d[:, 0], features_2d[:, 1], c=labels, cmap="viridis", alpha=0.7
     )
     plt.colorbar(scatter, label=args.label_column)
-    plt.title("t-SNE of wav2vec2-base-100h-l12 Features")
+    plt.title(f"t-SNE of {feature_type} Features ({label_short})")
     plt.xlabel("t-SNE 1")
     plt.ylabel("t-SNE 2")
     plt.tight_layout()
+    plt.savefig(save_path)
     plt.show()
+    print(f"t-SNE image saved to: {save_path}")
 
 
 if __name__ == "__main__":
