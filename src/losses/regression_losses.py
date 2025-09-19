@@ -47,7 +47,7 @@ class CCCLoss(nn.Module):
         >>> print(loss.shape)  # ()
     """
 
-    def __init__(self, alpha: float = 1/3, beta: float = 1/3):
+    def __init__(self, alpha: float = 1 / 3, beta: float = 1 / 3):
         """
         Initialize CCCLoss with weights for valence and arousal.
 
@@ -104,5 +104,7 @@ class CCCLoss(nn.Module):
         rho = cov_xy / (std_x * std_y + 1e-8)
 
         # CCC formula: 2ρσxσy / (σx² + σy² + (μx - μy)²)
-        ccc = (2 * rho * std_x * std_y) / (var_x + var_y + (mean_x - mean_y) ** 2 + 1e-8)
+        ccc = (2 * rho * std_x * std_y) / (
+            var_x + var_y + (mean_x - mean_y) ** 2 + 1e-8
+        )
         return ccc

@@ -27,7 +27,7 @@ model:
 # Training settings
 training:
   num_epochs: 200
-  learning_rate: 0.0005
+  learning_rate: 0.001
   classification_weight: 0.2 
   early_stopping:
     patience: 10
